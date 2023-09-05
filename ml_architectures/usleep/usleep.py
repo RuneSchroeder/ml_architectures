@@ -1,0 +1,297 @@
+# Code inspired by U-Sleep article
+# and https://github.com/neergaard/utime-pytorch
+
+import torch
+import torch.nn as nn
+import usleep_pytorch.utils as utils
+
+
+def get_model(args):
+    model = USleepModel(**vars(args))
+
+    return model
+
+
+class ConvBNELU(nn.Module):
+    def __init__(
+        self, 
+        in_channels=2, 
+        out_channels=6, 
+        kernel_size=9, 
+        dilation=1,
+        ceil_pad=False
+        ):
+
+        super().__init__()
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.dilation = dilation
+        self.padding = (self.kernel_size + (self.kernel_size - 1) * (self.dilation - 1) - 1) // 2
+        self.ceil_pad = ceil_pad
+
+        self.layers = nn.Sequential(
+            nn.ConstantPad1d(padding=(self.padding, self.padding), value=0), # https://iq.opengenus.org/output-size-of-convolution/
+            nn.Conv1d(
+                in_channels=self.in_channels,
+                out_channels=self.out_channels,
+                kernel_size=self.kernel_size,
+                dilation=self.dilation,
+                bias=True
+            ),
+            nn.ELU(),
+            nn.BatchNorm1d(self.out_channels)
+        )
+
+        self.ceil_padding = nn.Sequential(
+            nn.ConstantPad1d(padding=(0,1), value=0)
+        )
+
+        nn.init.xavier_uniform_(self.layers[1].weight) # Initializing weights for the conv1d layer
+        nn.init.zeros_(self.layers[1].bias) # Initializing biases as zeros for the conv1d layer
+
+
+    def forward(self, x):
+        if (self.ceil_pad) and (x.shape[2] % 2 == 1): # Pad 1 if dimension is uneven
+            x = self.ceil_padding(x)
+        
+        x = self.layers(x)
+        
+        # Added padding after since chaning decoder kernel from 9 to 2 introduced mismatch
+        if (self.ceil_pad) and (x.shape[2] % 2 == 1): # Pad 1 if dimension is uneven
+            x = self.ceil_padding(x)
+            
+        return x
+
+
+class Bottom(nn.Module): 
+    def __init__(
+        self, 
+        in_channels=214, 
+        out_channels=306, 
+        kernel_size=9, 
+        dilation=1
+        ):
+
+        super().__init__()
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.dilation = dilation
+        self.padding = (self.kernel_size + (self.kernel_size - 1) * (self.dilation - 1) - 1) // 2
+
+        self.layers = nn.Sequential(
+            nn.ConstantPad1d(padding=(self.padding, self.padding), value=0),
+            nn.Conv1d(
+                in_channels=self.in_channels,
+                out_channels=self.out_channels,
+                kernel_size=self.kernel_size,
+                dilation=self.dilation,
+                bias=True,
+            ),
+            nn.ELU(),
+            nn.BatchNorm1d(self.out_channels)
+        )
+        nn.init.xavier_uniform_(self.layers[1].weight) # Initializing weights for the conv1d layer
+        nn.init.zeros_(self.layers[1].bias) # Initializing biases as zeros for the conv1d layer
+
+    def forward(self, x):
+        return self.layers(x)
+
+
+class Encoder(nn.Module):
+    def __init__(
+        self, 
+        filters=[6, 9, 11, 15, 20, 28, 40, 55, 77, 108, 152, 214],
+        in_channels=2, 
+        maxpool_kernel=2, 
+        kernel_size=9, 
+        dilation=1
+        ):
+
+        super().__init__()
+
+        self.filters = filters
+        self.in_channels = in_channels
+        self.maxpool_kernel = maxpool_kernel
+        self.kernel_size = kernel_size
+        self.dilation = dilation
+
+        self.depth = len(self.filters)
+
+        self.blocks = nn.ModuleList([
+            nn.Sequential(
+                    ConvBNELU(
+                    in_channels=self.in_channels if k == 0 else self.filters[k - 1],
+                    out_channels=self.filters[k],
+                    kernel_size=self.kernel_size,
+                    dilation=self.dilation,
+                    ceil_pad = True
+                )
+            ) for k in range(self.depth) 
+        ]) 
+
+        self.maxpools = nn.ModuleList([
+            nn.MaxPool1d(self.maxpool_kernel) for k in range(self.depth)
+        ])
+
+        self.bottom = nn.Sequential( # 
+            ConvBNELU(
+                in_channels=self.filters[-1],
+                out_channels=302,
+                kernel_size=self.kernel_size
+            )
+        )
+
+
+    def forward(self, x):
+        shortcuts = [] # Residual connections
+        for layer, maxpool in zip(self.blocks, self.maxpools):
+            z = layer(x)
+            shortcuts.append(z)
+            x = maxpool(z)
+
+        encoded = self.bottom(x) 
+
+        return encoded, shortcuts
+
+class Decoder(nn.Module):
+    def __init__(
+        self, filters=[214, 152, 108, 77, 55, 40, 28, 20, 15, 11, 9, 6],
+        upsample_kernel=2,
+        in_channels=302, 
+        out_channels=428, 
+        kernel_size=2
+        ):
+
+        super().__init__()
+
+        self.filters = filters
+        self.upsample_kernel = upsample_kernel
+        self.in_channels = in_channels
+        self.kernel_size = kernel_size
+        self.out_channels = out_channels
+
+        self.depth = len(self.filters)
+
+        self.upsamples = nn.ModuleList([
+            nn.Sequential(
+                nn.Upsample(scale_factor=self.upsample_kernel),
+                ConvBNELU(
+                    in_channels=self.in_channels if k == 0 else self.filters[k - 1] * 2,
+                    out_channels=self.filters[k],
+                    kernel_size=self.kernel_size,
+                    ceil_pad = True
+                )
+            ) for k in range(self.depth)
+        ])
+
+        self.blocks = nn.ModuleList([
+            nn.Sequential(
+                ConvBNELU(
+                in_channels=self.filters[k] * 2,
+                out_channels=self.filters[k] * 2,
+                kernel_size=self.kernel_size,
+                ceil_pad = True
+                )
+            ) for k in range(self.depth)
+        ])
+
+
+    def forward(self, z, shortcuts):
+        for upsample, block, shortcut in zip(self.upsamples, self.blocks, shortcuts[::-1]): # [::-1] data is taken in reverse order
+            z = upsample(z)
+            
+            if z.shape[2] != shortcut.shape[2]:
+                z = utils.CropToMatch(z, shortcut)
+            
+            z = torch.cat([shortcut, z], dim=1)
+            
+            z = block(z)
+
+        return z
+
+
+class Dense(nn.Module):
+    def __init__(
+        self, 
+        in_channels=12, 
+        num_classes=6, 
+        kernel_size=1
+        ):
+
+        super().__init__()
+
+        self.in_channels = in_channels
+        self.num_classes = num_classes
+        self.kernel_size = kernel_size
+
+        self.dense = nn.Sequential(
+            nn.Conv1d(
+                in_channels=self.in_channels, 
+                out_channels=self.num_classes, 
+                kernel_size=self.kernel_size, 
+                bias=True
+                ),
+            nn.Tanh()
+        )
+
+        nn.init.xavier_uniform_(self.dense[0].weight)
+        nn.init.zeros_(self.dense[0].bias)
+
+
+    def forward(self, z):
+        z = self.dense(z)
+
+        return z
+
+
+class SegmentClassifier(nn.Module):
+    def __init__(self, num_classes=5, avgpool_kernel=3840, conv1d_kernel=1):
+        super().__init__()
+        self.num_classes = num_classes
+        self.avgpool_kernel = avgpool_kernel
+        self.conv1d_kernel = conv1d_kernel
+
+        self.avgpool = nn.AvgPool1d(self.avgpool_kernel)
+
+        self.layers = nn.Sequential(
+            nn.Conv1d(in_channels=self.num_classes + 1, out_channels=self.num_classes, kernel_size=self.conv1d_kernel),
+            nn.Conv1d(in_channels=self.num_classes, out_channels=self.num_classes, kernel_size=self.conv1d_kernel)
+            #nn.Softmax(dim=1) # We dont want softmax before xentropy loss
+        )
+
+        nn.init.xavier_uniform_(self.layers[0].weight)
+        nn.init.zeros_(self.layers[0].bias)
+
+
+    def forward(self, z):
+        z = self.avgpool(z)
+        z = self.layers(z)
+
+        return z
+
+
+class USleepModel(nn.Module):
+    def __init__(
+        self,
+    ):
+        super().__init__()
+
+        self.encoder = Encoder()
+        self.decoder = Decoder()
+        self.dense = Dense()
+        self.classifier = SegmentClassifier()
+
+        self.loss = nn.CrossEntropyLoss(ignore_index=5)
+
+    def forward(self, x):
+        x, shortcuts = self.encoder(x)
+        x = self.decoder(x, shortcuts)
+        x = self.dense(x)
+        x = self.classifier(x)
+
+
+        return x
