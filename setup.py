@@ -7,7 +7,7 @@ setup(
     url='https://gitlab.au.dk/tech_ear-eeg/ml_architectures',
     author='Jesper Strøm',
     author_email='js@ece.au.dk',
-    packages=['lseqsleepnet'],
+    packages=['architectures'],
     install_requires=['torch',
                       'numpy']
 )
