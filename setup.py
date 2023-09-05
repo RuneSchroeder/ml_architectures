@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='mlarchitectures',
-    version='0.1.0',    
+    version='0.1.1',    
     description='Shared ML Architectures',
     url='https://gitlab.au.dk/tech_ear-eeg/ml_architectures',
     author='Jesper Strøm',
