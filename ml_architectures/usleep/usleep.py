@@ -3,14 +3,6 @@
 
 import torch
 import torch.nn as nn
-import usleep_pytorch.utils as utils
-
-
-def get_model(args):
-    model = USleepModel(**vars(args))
-
-    return model
-
 
 class ConvBNELU(nn.Module):
     def __init__(
@@ -199,13 +191,18 @@ class Decoder(nn.Module):
             ) for k in range(self.depth)
         ])
 
+    def CropToMatch(input, shortcut):
+        diff = max(0, input.shape[2] - shortcut.shape[2])
+        start = diff // 2 + diff % 2
+
+        return input[:, :, start:start+shortcut.shape[2]]
 
     def forward(self, z, shortcuts):
         for upsample, block, shortcut in zip(self.upsamples, self.blocks, shortcuts[::-1]): # [::-1] data is taken in reverse order
             z = upsample(z)
             
             if z.shape[2] != shortcut.shape[2]:
-                z = utils.CropToMatch(z, shortcut)
+                z = self.CropToMatch(z, shortcut)
             
             z = torch.cat([shortcut, z], dim=1)
             
@@ -274,7 +271,7 @@ class SegmentClassifier(nn.Module):
         return z
 
 
-class USleepModel(nn.Module):
+class USleep(nn.Module):
     def __init__(
         self,
     ):
@@ -292,6 +289,5 @@ class USleepModel(nn.Module):
         x = self.decoder(x, shortcuts)
         x = self.dense(x)
         x = self.classifier(x)
-
 
         return x
