@@ -191,7 +191,7 @@ class Decoder(nn.Module):
             ) for k in range(self.depth)
         ])
 
-    def CropToMatch(input, shortcut):
+    def CropToMatch(self, input, shortcut):
         diff = max(0, input.shape[2] - shortcut.shape[2])
         start = diff // 2 + diff % 2
 
