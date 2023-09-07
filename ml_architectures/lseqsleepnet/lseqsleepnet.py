@@ -11,8 +11,9 @@ from .long_sequence_model import LongSequenceModel
 from .epoch_encoder import MultipleEpochEncoder
 from .classifier import Classifier
 
+
 class LSeqSleepNet(nn.Module):
-    class Config():
+    class Config:
         def __init__(self, encoder_conf, lsm_conf, clf_conf):
             self.encoder_conf = encoder_conf
             self.lsm_conf = lsm_conf
@@ -23,22 +24,16 @@ class LSeqSleepNet(nn.Module):
         self.epoch_encoder = MultipleEpochEncoder(enc_conf)
         self.sequence_model = LongSequenceModel(lsm_conf)
         self.classifier = Classifier(clf_conf)
-        
+
     def forward(self, x):
         # x is (Batch, Epoch, Channels, Sequence, Feature)
         x = self.epoch_encoder(x)
-        
-        # x is (Batch, Epoch, Feature)        
+
+        # x is (Batch, Epoch, Feature)
         x = self.sequence_model(x)
-        
+
         # x is (Batch, Epoch, Feature)
         x = self.classifier(x)
-        
+
         # x is (Batch, Epoch, Probabilities)
         return x
-
-
-
-
-
-
