@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from common.bn_blstm import BLSTM_Layer, BLSTM_Layer_Torch
+from common.bn_blstm import BLSTM_Layer
 from common.basic_layers import FC
 
 
