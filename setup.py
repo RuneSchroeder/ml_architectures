@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="mlarchitectures",
-    version="0.2.1",
+    version="0.2.2",
     description="Shared ML Architectures",
     url="https://gitlab.au.dk/tech_ear-eeg/ml_architectures",
     author="Jesper Strøm",
@@ -11,6 +11,7 @@ setup(
         "ml_architectures",
         "ml_architectures.lseqsleepnet",
         "ml_architectures.usleep",
+        "ml_architectures.common",
     ],
     install_requires=["torch", "numpy"],
 )
