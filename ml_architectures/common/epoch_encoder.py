@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from common.bn_blstm import BLSTM_Layer, BLSTM_Layer_Torch
+from common.bn_blstm import BLSTMLayer
 from common.filterbank_shape import FilterbankShape
 
 
@@ -48,7 +48,11 @@ class MultipleEpochEncoder(nn.Module):
         # Assumes (Batch, Epoch, Channels, Sequence, Feature)
         num_batches, num_epochs, num_channels, num_sequences, num_features = x.shape
 
-        assert num_channels == self.num_channels
+        if num_channels != self.num_channels:
+            raise ValueError(
+                f"Expected number of channels is {self.num_channels}. Got {num_channels}."
+            )
+
         # Flatten to (Epoch, Sequence, Feature)
 
         x = torch.reshape(x, (-1, num_channels, num_sequences, num_features))
@@ -63,22 +67,17 @@ class MultipleEpochEncoder(nn.Module):
 class SingleEpochEncoder(nn.Module):
     def __init__(
         self,
-        F,
-        M,
-        minF,
-        maxF,
-        samplerate,
+        num_filters,
         seq_len,
         hidden_size,
         attention_size,
         num_channels,
     ):
         super().__init__()
-        self.filterbank = LearnableFilterbank(M, num_channels)
-        self.BLSTM = BLSTM_Layer(M * num_channels, seq_len, hidden_size)
-
-        # Because its bidirectional, feature size is doubled
-        self.attention = Attention_Layer(hidden_size, seq_len, attention_size)
+        self.filterbank = LearnableFilterbank(num_filters, num_channels)
+        self.BLSTM = BLSTMLayer(num_filters * num_channels, seq_len, hidden_size)
+        # Bidirectional lstm returns output of size 2 * hidden size
+        self.attention = AttentionLayer(2 * hidden_size, seq_len, attention_size)
 
     def forward(self, x):
         # Assumes (Epoch, Sequence, Feature)
@@ -135,21 +134,19 @@ class LearnableFilterbank(nn.Module):
         return x
 
 
-class Attention_Layer(nn.Module):
-    # From Kaare implementation
-    def __init__(self, hidden_size, time_bins, attention_size):
+class AttentionLayer(nn.Module):
+    # From Kaare's implementation
+    def __init__(self, feature_size, time_bins, attention_size):
         super().__init__()
-        self.attweight_w = torch.nn.Parameter(
-            torch.randn(2 * hidden_size, attention_size)
-        )
+        self.attweight_w = torch.nn.Parameter(torch.randn(feature_size, attention_size))
         self.attweight_b = torch.nn.Parameter(torch.randn(attention_size))
         self.attweight_u = torch.nn.Parameter(torch.randn(attention_size))
-        self.nHidden = hidden_size
+        self.feature_size = feature_size
         self.time_bins = time_bins
 
     def forward(self, x):
         v = torch.tanh(
-            torch.matmul(torch.reshape(x, [-1, self.nHidden * 2]), self.attweight_w)
+            torch.matmul(torch.reshape(x, [-1, self.feature_size]), self.attweight_w)
             + torch.reshape(self.attweight_b, [1, -1])
         )
         vu = torch.matmul(v, torch.reshape(self.attweight_u, [-1, 1]))

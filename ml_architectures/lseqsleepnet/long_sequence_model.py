@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from common.bn_blstm import BLSTM_Layer, BLSTM_Layer_Torch
+from common.bn_blstm import BLSTMLayer
 from common.basic_layers import FC
 
 
@@ -55,9 +55,8 @@ class SequenceFolder(nn.Module):
     def forward(self, x):
         # Assumes (Batch, Epoch, Features)
         num_batches, num_epochs, num_features = x.shape
-        assert (
-            num_epochs == self.K * self.B
-        ), f"Num epochs: {num_epochs}, K: {self.K}, B: {self.B}"
+        if num_epochs != self.K * self.B:
+            raise ValueError(f"Expected {self.K*self.B} epochs, got {num_epochs}")
 
         x = x.unflatten(1, sizes=(self.B, self.K))
 
@@ -78,7 +77,7 @@ class SubsequenceModel(nn.Module):
     def __init__(self, K, B, input_size, hidden_size):
         super().__init__()
 
-        self.blstm = BLSTM_Layer(input_size, K, hidden_size)
+        self.blstm = BLSTMLayer(input_size, K, hidden_size)
         self.fc = FC(hidden_size * 2, input_size, dropout=0.1, activation="none")
         self.hidden_size = hidden_size
         self.input_size = input_size
