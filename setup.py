@@ -9,6 +9,7 @@ setup(
     author_email="js@ece.au.dk",
     packages=[
         "ml_architectures",
+        "ml_architectures.common",
         "ml_architectures.lseqsleepnet",
         "ml_architectures.usleep",
     ],

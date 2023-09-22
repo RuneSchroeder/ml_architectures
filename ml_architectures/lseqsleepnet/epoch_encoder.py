@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
-from common.bn_blstm import BLSTM_Layer, BLSTM_Layer_Torch
-from common.filterbank_shape import FilterbankShape
+from ml_architectures.common.bn_blstm import BLSTM_Layer, BLSTM_Layer_Torch
+from ml_architectures.common.filterbank_shape import FilterbankShape
 
 
 class MultipleEpochEncoder(nn.Module):
