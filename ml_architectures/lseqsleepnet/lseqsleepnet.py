@@ -7,10 +7,9 @@ Created on Thu Feb  2 13:40:59 2023
 
 import torch.nn as nn
 import torch.nn.functional as F
-from .long_sequence_model import LongSequenceModel
-from .epoch_encoder import MultipleEpochEncoder
-from .classifier import Classifier
-
+from ml_architectures.lseqsleepnet.long_sequence_model import LongSequenceModel
+from ml_architectures.lseqsleepnet.epoch_encoder import MultipleEpochEncoder
+from ml_architectures.lseqsleepnet.classifier import Classifier
 
 class LSeqSleepNet(nn.Module):
     class Config:
