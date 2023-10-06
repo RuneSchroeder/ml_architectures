@@ -7,7 +7,7 @@ import math
 
 class ConvBNELU(nn.Module):
     def __init__(
-        self, in_channels=2, out_channels=6, kernel_size=9, dilation=1, ceil_pad=False
+        self, in_channels, out_channels=6, kernel_size=9, dilation=1, ceil_pad=False
     ):
         super().__init__()
 
@@ -245,6 +245,7 @@ class SegmentClassifier(nn.Module):
 class USleep(nn.Module):
     def __init__(
         self,
+        num_channels = 2,
         initial_filters = 5,
         complexity_factor = 1.67
     ):
@@ -256,7 +257,7 @@ class USleep(nn.Module):
         
         encoder_filters, decoder_filters, max_filters = self.create_filters()
         
-        self.encoder = Encoder(filters=encoder_filters, max_filters=max_filters)
+        self.encoder = Encoder(filters=encoder_filters, max_filters=max_filters, in_channels=num_channels)
         self.decoder = Decoder(filters=decoder_filters, max_filters=max_filters)
         self.dense = Dense(encoder_filters[0])
         self.classifier = SegmentClassifier()
