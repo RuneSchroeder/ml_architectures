@@ -3,11 +3,11 @@
 
 import torch
 import torch.nn as nn
-
+import math
 
 class ConvBNELU(nn.Module):
     def __init__(
-        self, in_channels=2, out_channels=6, kernel_size=9, dilation=1, ceil_pad=False
+        self, in_channels, out_channels=6, kernel_size=9, dilation=1, ceil_pad=False
     ):
         super().__init__()
 
@@ -18,7 +18,6 @@ class ConvBNELU(nn.Module):
         self.padding = (
             self.kernel_size + (self.kernel_size - 1) * (self.dilation - 1) - 1
         ) // 2
-        self.ceil_pad = ceil_pad
 
         self.layers = nn.Sequential(
             nn.ConstantPad1d(
@@ -34,7 +33,7 @@ class ConvBNELU(nn.Module):
             nn.ELU(),
             nn.BatchNorm1d(self.out_channels),
         )
-
+        self.ceil_pad = ceil_pad
         self.ceil_padding = nn.Sequential(nn.ConstantPad1d(padding=(0, 1), value=0))
 
         nn.init.xavier_uniform_(
@@ -45,9 +44,6 @@ class ConvBNELU(nn.Module):
         )  # Initializing biases as zeros for the conv1d layer
 
     def forward(self, x):
-        if (self.ceil_pad) and (x.shape[2] % 2 == 1):  # Pad 1 if dimension is uneven
-            x = self.ceil_padding(x)
-
         x = self.layers(x)
 
         # Added padding after since changing decoder kernel from 9 to 2 introduced mismatch
@@ -56,46 +52,11 @@ class ConvBNELU(nn.Module):
 
         return x
 
-
-class Bottom(nn.Module):
-    def __init__(self, in_channels=214, out_channels=306, kernel_size=9, dilation=1):
-        super().__init__()
-
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.kernel_size = kernel_size
-        self.dilation = dilation
-        self.padding = (
-            self.kernel_size + (self.kernel_size - 1) * (self.dilation - 1) - 1
-        ) // 2
-
-        self.layers = nn.Sequential(
-            nn.ConstantPad1d(padding=(self.padding, self.padding), value=0),
-            nn.Conv1d(
-                in_channels=self.in_channels,
-                out_channels=self.out_channels,
-                kernel_size=self.kernel_size,
-                dilation=self.dilation,
-                bias=True,
-            ),
-            nn.ELU(),
-            nn.BatchNorm1d(self.out_channels),
-        )
-        nn.init.xavier_uniform_(
-            self.layers[1].weight
-        )  # Initializing weights for the conv1d layer
-        nn.init.zeros_(
-            self.layers[1].bias
-        )  # Initializing biases as zeros for the conv1d layer
-
-    def forward(self, x):
-        return self.layers(x)
-
-
 class Encoder(nn.Module):
     def __init__(
         self,
-        filters=[6, 9, 11, 15, 20, 28, 40, 55, 77, 108, 152, 214],
+        filters,
+        max_filters,
         in_channels=2,
         maxpool_kernel=2,
         kernel_size=9,
@@ -133,7 +94,7 @@ class Encoder(nn.Module):
         self.bottom = nn.Sequential(  #
             ConvBNELU(
                 in_channels=self.filters[-1],
-                out_channels=302,
+                out_channels=max_filters,
                 kernel_size=self.kernel_size,
             )
         )
@@ -153,19 +114,17 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(
         self,
-        filters=[214, 152, 108, 77, 55, 40, 28, 20, 15, 11, 9, 6],
+        filters,
+        max_filters,
         upsample_kernel=2,
-        in_channels=302,
-        out_channels=428,
-        kernel_size=2,
+        kernel_size=9,
     ):
         super().__init__()
 
         self.filters = filters
         self.upsample_kernel = upsample_kernel
-        self.in_channels = in_channels
+        self.in_channels = max_filters
         self.kernel_size = kernel_size
-        self.out_channels = out_channels
 
         self.depth = len(self.filters)
 
@@ -176,9 +135,9 @@ class Decoder(nn.Module):
                     ConvBNELU(
                         in_channels=self.in_channels
                         if k == 0
-                        else self.filters[k - 1] * 2,
+                        else self.filters[k - 1],
                         out_channels=self.filters[k],
-                        kernel_size=self.kernel_size,
+                        kernel_size=self.upsample_kernel,
                         ceil_pad=True,
                     ),
                 )
@@ -191,7 +150,7 @@ class Decoder(nn.Module):
                 nn.Sequential(
                     ConvBNELU(
                         in_channels=self.filters[k] * 2,
-                        out_channels=self.filters[k] * 2,
+                        out_channels=self.filters[k],
                         kernel_size=self.kernel_size,
                         ceil_pad=True,
                     )
@@ -223,7 +182,7 @@ class Decoder(nn.Module):
 
 
 class Dense(nn.Module):
-    def __init__(self, in_channels=12, num_classes=6, kernel_size=1):
+    def __init__(self, in_channels, num_classes=6, kernel_size=1):
         super().__init__()
 
         self.in_channels = in_channels
@@ -274,6 +233,9 @@ class SegmentClassifier(nn.Module):
         nn.init.xavier_uniform_(self.layers[0].weight)
         nn.init.zeros_(self.layers[0].bias)
 
+        nn.init.xavier_uniform_(self.layers[1].weight)
+        nn.init.zeros_(self.layers[1].bias)
+
     def forward(self, z):
         z = self.avgpool(z)
         z = self.layers(z)
@@ -283,20 +245,45 @@ class SegmentClassifier(nn.Module):
 class USleep(nn.Module):
     def __init__(
         self,
+        num_channels = 2,
+        initial_filters = 5,
+        complexity_factor = 1.67
     ):
         super().__init__()
 
-        self.encoder = Encoder()
-        self.decoder = Decoder()
-        self.dense = Dense()
+        self.initial_filters = initial_filters
+        self.new_filter_factor = math.sqrt(complexity_factor)
+        self.progression_factor = math.sqrt(2)
+        
+        encoder_filters, decoder_filters, max_filters = self.create_filters()
+        
+        self.encoder = Encoder(filters=encoder_filters, max_filters=max_filters, in_channels=num_channels)
+        self.decoder = Decoder(filters=decoder_filters, max_filters=max_filters)
+        self.dense = Dense(encoder_filters[0])
         self.classifier = SegmentClassifier()
 
-        self.loss = nn.CrossEntropyLoss(ignore_index=5)
+    def create_filters(self) -> (list, list, int):
+        encoder_filters = []
+        decoder_filters = []
+        current_filters = self.initial_filters
 
+        for _ in range(13):
+            encoder_filters.append(int(current_filters*self.new_filter_factor))
+            current_filters = int(self.progression_factor*current_filters)
+
+        max_filters = encoder_filters[-1]
+        encoder_filters.pop()
+        decoder_filters = encoder_filters[::-1]
+        
+        return encoder_filters, decoder_filters, max_filters
+    
     def forward(self, x):
         x, shortcuts = self.encoder(x)
+ 
         x = self.decoder(x, shortcuts)
+
         x = self.dense(x)
+
         x = self.classifier(x)
 
         return x

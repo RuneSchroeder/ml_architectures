@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
-from common.bn_blstm import BLSTMLayer
-from common.basic_layers import FC
+from ml_architectures.common.bn_blstm import BLSTM_Layer
+from ml_architectures.common.basic_layers import FC
 
 
 class LongSequenceModel(nn.Module):
