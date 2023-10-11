@@ -8,7 +8,7 @@ Created on Thu Feb  2 13:40:59 2023
 import torch.nn as nn
 import torch.nn.functional as F
 from ml_architectures.lseqsleepnet.long_sequence_model import LongSequenceModel
-from ml_architectures.lseqsleepnet.epoch_encoder import MultipleEpochEncoder
+from ml_architectures.common.epoch_encoder import EpochEncoder
 from ml_architectures.lseqsleepnet.classifier import Classifier
 
 
@@ -21,7 +21,7 @@ class LSeqSleepNet(nn.Module):
 
     def __init__(self, enc_conf, lsm_conf, clf_conf):
         super().__init__()
-        self.epoch_encoder = MultipleEpochEncoder(enc_conf)
+        self.epoch_encoder = EpochEncoder(enc_conf)
         self.sequence_model = LongSequenceModel(lsm_conf)
         self.classifier = Classifier(clf_conf)
 
