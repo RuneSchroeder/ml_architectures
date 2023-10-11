@@ -1,16 +1,17 @@
 import torch.nn as nn
 import torch
-from ml_architectures.common.bn_blstm import BLSTM_Layer
+from ml_architectures.common.bn_blstm import BLSTMLayer
 from ml_architectures.common.basic_layers import FC
 
 
 class LongSequenceModel(nn.Module):
     class Config:
-        def __init__(self, K, B, lstm_input_size, lstm_hidden_size):
+        def __init__(self, K, B, lstm_input_size, lstm_hidden_size, dropout_rate):
             self.K = K
             self.B = B
             self.lstm_input_size = lstm_input_size
             self.lstm_hidden_size = lstm_hidden_size
+            self.dropout_rate = dropout_rate
 
     def __init__(self, config: Config):
         super().__init__()
@@ -54,7 +55,7 @@ class SequenceFolder(nn.Module):
 
     def forward(self, x):
         # Assumes (Batch, Epoch, Features)
-        num_batches, num_epochs, num_features = x.shape
+        _, num_epochs, _ = x.shape
         if num_epochs != self.K * self.B:
             raise ValueError(f"Expected {self.K*self.B} epochs, got {num_epochs}")
 
@@ -74,11 +75,11 @@ class SequenceUnfolder(nn.Module):
 
 
 class SubsequenceModel(nn.Module):
-    def __init__(self, K, B, input_size, hidden_size):
+    def __init__(self, K, B, input_size, hidden_size, dropout):
         super().__init__()
 
-        self.blstm = BLSTMLayer(input_size, K, hidden_size)
-        self.fc = FC(hidden_size * 2, input_size, dropout=0.1, activation="none")
+        self.blstm = BLSTMLayer(input_size, hidden_size, dropout)
+        self.fc = FC(hidden_size * 2, input_size, dropout=dropout, activation="none")
         self.hidden_size = hidden_size
         self.input_size = input_size
         self.B = B
@@ -88,7 +89,7 @@ class SubsequenceModel(nn.Module):
     def forward(self, x):
         # Assumes (Batch, B, K, Features)
 
-        num_batch, B, K, num_features = x.shape
+        _, B, K, num_features = x.shape
 
         assert self.K == K
         assert self.B == B

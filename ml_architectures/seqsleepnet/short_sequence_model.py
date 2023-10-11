@@ -13,12 +13,14 @@ class ShortSequenceModel(nn.Module):
         self.lstm = nn.LSTM(
             input_size=config.lstm_input_size,
             hidden_size=config.lstm_hidden_size,
+            batch_first=True,
+            bidirectional=True,
         )
         self.dropout = nn.Dropout(p=config.dropout_rate)
 
     def forward(self, x):
         # x is (Batch, Epoch, Feature)
-        x = self.lstm(x)  # obs. hidden states implicitly 0
+        x, _ = self.lstm(x)  # obs. hidden states implicitly 0
 
         # x is (Batch, Feature)
         x = self.dropout(x)

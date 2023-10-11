@@ -14,16 +14,18 @@ class BN(nn.Module):
 
 
 class BLSTMLayer(nn.Module):
-    def __init__(self, input_size, seq_len, hidden_size):
+    def __init__(self, input_size, hidden_size, dropout):
         super().__init__()
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.blstm = BLSTMLayerTorch(input_size, seq_len, hidden_size).to(self.device)
-        # self.blstm = BLSTM_Layer_Own(input_size, seq_len, hidden_size)
+        self.lstm = self.lstm = torch.nn.LSTM(
+            input_size, hidden_size, batch_first=True, bidirectional=True
+        )
+
+        self.dropout = torch.nn.Dropout(dropout)
 
     def forward(self, x):
-        x = x.to(self.device)
-        x = self.blstm(x)
+        x, _ = self.lstm(x)
+        x = self.dropout(x)
         return x
 
 
@@ -106,7 +108,7 @@ class BLSTMLayerOwn(nn.Module):
 
 # Regular LSTM from pytorch
 class BLSTMLayerTorch(nn.Module):
-    def __init__(self, input_size, seq_len, hidden_size):
+    def __init__(self, input_size, hidden_size):
         super().__init__()
 
         self.lstm = torch.nn.LSTM(

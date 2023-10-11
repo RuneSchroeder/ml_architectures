@@ -1,107 +1,82 @@
 import torch.nn as nn
 import torch
-from ml_architectures.common.bn_blstm import BLSTM_Layer
-from ml_architectures.common.filterbank_shape import FilterbankShape
+from ml_architectures.common.bn_blstm import BLSTMLayer
+from ml_architectures.common.filterbank_utils import FilterbankUtilities
 
 
-class MultipleEpochEncoder(nn.Module):
+class EpochEncoder(nn.Module):
     class Config:
         def __init__(
             self,
-            F,
-            M,
-            minF,
-            maxF,
-            samplerate,
-            seq_len,
+            num_filters,
+            frequency_dim,
+            time_dim,
             lstm_hidden_size,
             attention_size,
             num_channels,
+            dropout_rate,
         ):
-            self.F = F
-            self.M = M
-            self.minF = minF
-            self.maxF = maxF
-            self.samplerate = samplerate
-            self.seq_len = seq_len
+            self.num_filters = num_filters
+            self.frequency_dim = frequency_dim
+            self.time_dim = time_dim
             self.lstm_hidden_size = lstm_hidden_size
             self.attention_size = attention_size
             self.num_channels = num_channels
+            self.dropout_rate = dropout_rate
 
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
         self.num_channels = config.num_channels
-        self.encoder = SingleEpochEncoder(
-            config.F,
-            config.M,
-            config.minF,
-            config.maxF,
-            config.samplerate,
-            config.seq_len,
-            config.lstm_hidden_size,
-            config.attention_size,
-            config.num_channels,
+        self.filterbank = LearnableFilterbank(
+            num_filters=config.num_filters,
+            num_channels=config.num_channels,
+            frequency_dim=config.frequency_dim,
+        )
+        self.BLSTM = BLSTMLayer(
+            input_size=config.num_filters * config.num_channels,
+            hidden_size=config.lstm_hidden_size,
+            dropout=config.dropout_rate,
+        )
+        # Bidirectional lstm returns output of size 2 * hidden size
+        self.attention = AttentionLayer(
+            feature_size=2 * config.lstm_hidden_size,
+            time_dim=config.time_dim,
+            attention_size=config.attention_size,
         )
 
     def forward(self, x):
         # Assumes (Batch, Epoch, Channels, Sequence, Feature)
-        num_batches, num_epochs, num_channels, num_sequences, num_features = x.shape
+        _, num_epochs, num_channels, time_dim, frequency_dim = x.shape
 
         if num_channels != self.num_channels:
             raise ValueError(
                 f"Expected number of channels is {self.num_channels}. Got {num_channels}."
             )
 
-        # Flatten to (Epoch, Sequence, Feature)
+        # Flatten to (Epoch, Channels, Sequence, Feature)
+        x = torch.reshape(x, (-1, num_channels, time_dim, frequency_dim))
 
-        x = torch.reshape(x, (-1, num_channels, num_sequences, num_features))
-        x = self.encoder(x)
+        # Process
+        x = self.filterbank(x)
+        x = self.BLSTM(x)
+        x = self.attention(x)
 
         # Unflatten to (Batch, Epoch, Feature)
         x = torch.reshape(x, (-1, num_epochs, self.config.lstm_hidden_size * 2))
         return x
 
 
-# Encodes one epoch
-class SingleEpochEncoder(nn.Module):
-    def __init__(
-        self,
-        num_filters,
-        seq_len,
-        hidden_size,
-        attention_size,
-        num_channels,
-    ):
-        super().__init__()
-        self.filterbank = LearnableFilterbank(num_filters, num_channels)
-        self.BLSTM = BLSTMLayer(num_filters * num_channels, seq_len, hidden_size)
-        # Bidirectional lstm returns output of size 2 * hidden size
-        self.attention = AttentionLayer(2 * hidden_size, seq_len, attention_size)
-
-    def forward(self, x):
-        # Assumes (Epoch, Sequence, Feature)
-        x = self.filterbank(x)
-        x = self.BLSTM(x)
-
-        x = self.attention(x)
-        return x
-
-
 class LearnableFilterbank(nn.Module):
-    def __init__(self, num_filters, num_channels):
+    def __init__(self, num_filters, num_channels, frequency_dim):
         super().__init__()
         self.num_channels = num_channels
         self.num_filters = num_filters
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.frequency_dim = frequency_dim
 
-        # magic numbers!
-        filter_shape = FilterbankShape.lin_tri_filter_shape(
-            nfilt=num_filters,
-            nfft=256,
-            samplerate=100,
-            lowfreq=0,
-            highfreq=50,
+        filter_shape = FilterbankUtilities.linear_tri_filterbank(
+            num_filters=num_filters,
+            frequency_dim=frequency_dim,
         )
 
         triangular_matrix = torch.tensor(filter_shape, dtype=torch.float)
@@ -123,7 +98,7 @@ class LearnableFilterbank(nn.Module):
             filterbank = torch.multiply(
                 torch.sigmoid(self.filter_weights[:, c]),
                 self.triangular_matrix,
-            ).to(self.device)
+            )
 
             data = torch.matmul(data, filterbank)
             chnls.append(data)
@@ -136,13 +111,13 @@ class LearnableFilterbank(nn.Module):
 
 class AttentionLayer(nn.Module):
     # From Kaare's implementation
-    def __init__(self, feature_size, time_bins, attention_size):
+    def __init__(self, feature_size, time_dim, attention_size):
         super().__init__()
         self.attweight_w = torch.nn.Parameter(torch.randn(feature_size, attention_size))
         self.attweight_b = torch.nn.Parameter(torch.randn(attention_size))
         self.attweight_u = torch.nn.Parameter(torch.randn(attention_size))
         self.feature_size = feature_size
-        self.time_bins = time_bins
+        self.time_dim = time_dim
 
     def forward(self, x):
         v = torch.tanh(
@@ -150,7 +125,7 @@ class AttentionLayer(nn.Module):
             + torch.reshape(self.attweight_b, [1, -1])
         )
         vu = torch.matmul(v, torch.reshape(self.attweight_u, [-1, 1]))
-        exps = torch.reshape(torch.exp(vu), [-1, self.time_bins])
+        exps = torch.reshape(torch.exp(vu), [-1, self.time_dim])
         alphas = exps / torch.reshape(torch.sum(exps, 1), [-1, 1])
-        x = torch.sum(x * torch.reshape(alphas, [-1, self.time_bins, 1]), 1)
+        x = torch.sum(x * torch.reshape(alphas, [-1, self.time_dim, 1]), 1)
         return x
