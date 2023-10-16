@@ -33,7 +33,7 @@ def test_progression_factor_change():
     net = USleep(num_channels=2,
                  initial_filters=5,
                  complexity_factor=1.67,
-                 progression_factor=4)
+                 progression_factor=3)
     
     x = torch.rand((1, 2, 35*30*128))
 
