@@ -247,13 +247,14 @@ class USleep(nn.Module):
         self,
         num_channels = 2,
         initial_filters = 5,
-        complexity_factor = 1.67
+        complexity_factor = 1.67,
+        progression_factor = 2,
     ):
         super().__init__()
 
         self.initial_filters = initial_filters
         self.new_filter_factor = math.sqrt(complexity_factor)
-        self.progression_factor = math.sqrt(2)
+        self.progression_factor = math.sqrt(progression_factor)
         
         encoder_filters, decoder_filters, max_filters = self.create_filters()
         
