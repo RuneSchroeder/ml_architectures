@@ -2,17 +2,6 @@ import torch.nn as nn
 import torch
 
 
-# TODO
-class BN(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        # Assumes (Batch, values)
-
-        return x
-
-
 class BLSTMLayer(nn.Module):
     def __init__(self, input_size, hidden_size, dropout):
         super().__init__()

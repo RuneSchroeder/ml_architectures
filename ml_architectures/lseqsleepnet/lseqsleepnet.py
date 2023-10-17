@@ -14,16 +14,16 @@ from ml_architectures.lseqsleepnet.classifier import Classifier
 
 class LSeqSleepNet(nn.Module):
     class Config:
-        def __init__(self, encoder_conf, lsm_conf, clf_conf):
-            self.encoder_conf = encoder_conf
-            self.lsm_conf = lsm_conf
-            self.clf_conf = clf_conf
+        def __init__(self, encoder_config, lsm_config, classifier_config):
+            self.encoder_config = encoder_config
+            self.lsm_config = lsm_config
+            self.classifier_config = classifier_config
 
-    def __init__(self, enc_conf, lsm_conf, clf_conf):
+    def __init__(self, config):
         super().__init__()
-        self.epoch_encoder = EpochEncoder(enc_conf)
-        self.sequence_model = LongSequenceModel(lsm_conf)
-        self.classifier = Classifier(clf_conf)
+        self.epoch_encoder = EpochEncoder(config.encoder_config)
+        self.sequence_model = LongSequenceModel(config.lsm_config)
+        self.classifier = Classifier(config.classifier_config)
 
     def forward(self, x):
         # x is (Batch, Epoch, Channels, Sequence, Feature)

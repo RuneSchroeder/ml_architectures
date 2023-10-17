@@ -1,9 +1,9 @@
 from ml_architectures.common.epoch_encoder import EpochEncoder
-from .short_sequence_model import ShortSequenceModel
+from .long_sequence_model import LongSequenceModel
 from .classifier import Classifier
-from .seqsleepnet import SeqSleepNet
+from .lseqsleepnet import LSeqSleepNet
 
-_SEQSLEEPNET_KEYWORDS = {
+_LSEQSLEEPNET_KEYWORDS = {
     "num_filters",
     "time_dim",
     "frequency_dim",
@@ -12,12 +12,15 @@ _SEQSLEEPNET_KEYWORDS = {
     "encoder_hidden_size",
     "sequence_hidden_size",
     "dropout_rate",
+    "folded_width",
+    "folded_height",
 }
 
 
-def make_seqsleepnet_config(**kwargs) -> SeqSleepNet.Config:
+def make_lseqsleepnet_config(**kwargs) -> LSeqSleepNet.Config:
     """
     Get a default config choice. You can customize specific elements.
+    Note that the default sequene length is 200 epochs.
 
     Args:
         num_filters (int): The number of filters in the bank. Default is 32.
@@ -26,15 +29,17 @@ def make_seqsleepnet_config(**kwargs) -> SeqSleepNet.Config:
         attention_size (int): The size of the attention vector. Default is 64.
         num_channels (int): The number of input channels. Default is 1.
         dropout_rate (float): The rate of dropout on LSTM layer outputs.
-        encoder_hidden_size: The hidden size of the encoder LSTM.
-        sequence_hidden_size: The hidden size of the sequence LSTM.
-
+        encoder_hidden_size (int): The hidden size of the encoder LSTM.
+        sequence_hidden_size (int): The hidden size of the sequence LSTM.
+        folded_height (int): The height of the folded sequence matrix (B). Default is 10.
+        folded_width (int): The width of the folded sequence matrix (K). Default is 20.
+        fc_hidden_size (int): The hidden dimension of classifier fc layers. Default is 512.
     Returns:
-        SeqSleepNet.Config : A SeqSleepNet config object.
+        LSeqSleepNet.Config : A LSeqSleepNet config object.
 
     """
-    if any(not keyword in _SEQSLEEPNET_KEYWORDS for keyword in kwargs):
-        error_set = set(kwargs.keys()).difference(_SEQSLEEPNET_KEYWORDS)
+    if any(not keyword in _LSEQSLEEPNET_KEYWORDS for keyword in kwargs):
+        error_set = set(kwargs.keys()).difference(_LSEQSLEEPNET_KEYWORDS)
         raise ValueError(f"Received invalid keyword(s) {error_set}.")
 
     encoder_kwargs = {
@@ -55,25 +60,34 @@ def make_seqsleepnet_config(**kwargs) -> SeqSleepNet.Config:
     else:
         encoder_kwargs["lstm_hidden_size"] = 64
 
-    ssm_kwargs = {
+    lsm_kwargs = {
         "lstm_hidden_size": 64,
         "lstm_input_size": 2 * encoder_kwargs["lstm_hidden_size"],
         "dropout_rate": 0.2,
+        "B": 10,
+        "K": 20,
     }
 
     if "sequence_hidden_size" in kwargs:
-        ssm_kwargs["lstm_hidden_size"] = kwargs["sequence_hidden_size"]
+        lsm_kwargs["lstm_hidden_size"] = kwargs["sequence_hidden_size"]
 
     if "dropout_rate" in kwargs:
-        ssm_kwargs["dropout_rate"] = kwargs["dropout_rate"]
+        lsm_kwargs["dropout_rate"] = kwargs["dropout_rate"]
+
+    if "folded_height" in kwargs:
+        lsm_kwargs["B"] = kwargs["folded_height"]
+
+    if "folded_width" in kwargs:
+        lsm_kwargs["K"] = kwargs["folded_widtht"]
 
     classifier_kwargs = {
-        "fc_input_size": 2 * ssm_kwargs["lstm_hidden_size"],
+        "fc_input_size": 2 * lsm_kwargs["lstm_hidden_size"],
         "fc_output_size": 5,
+        "fc_hidden_size": 512,
     }
 
-    return SeqSleepNet.Config(
+    return LSeqSleepNet.Config(
         encoder_config=EpochEncoder.Config(**encoder_kwargs),
-        ssm_config=ShortSequenceModel.Config(**ssm_kwargs),
+        lsm_config=LongSequenceModel.Config(**lsm_kwargs),
         classifier_config=Classifier.Config(**classifier_kwargs),
     )
