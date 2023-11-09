@@ -2,32 +2,23 @@ import torch.nn as nn
 import torch
 
 
-# TODO
-class BN(nn.Module):
-    def __init__(self):
+class BLSTMLayer(nn.Module):
+    def __init__(self, input_size, hidden_size, dropout):
         super().__init__()
 
-    def forward(self, x):
-        # Assumes (Batch, values)
+        self.lstm = self.lstm = torch.nn.LSTM(
+            input_size, hidden_size, batch_first=True, bidirectional=True
+        )
 
+        self.dropout = torch.nn.Dropout(dropout)
+
+    def forward(self, x):
+        x, _ = self.lstm(x)
+        x = self.dropout(x)
         return x
 
 
-class BLSTM_Layer(nn.Module):
-    def __init__(self, input_size, seq_len, hidden_size):
-        super().__init__()
-
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.blstm = BLSTM_Layer_Torch(input_size, seq_len, hidden_size).to(self.device)
-        # self.blstm = BLSTM_Layer_Own(input_size, seq_len, hidden_size)
-
-    def forward(self, x):
-        x = x.to(self.device)
-        x = self.blstm(x)
-        return x
-
-
-class BN_LSTM_Cell(nn.Module):
+class BNLSTMCell(nn.Module):
     def __init__(self, input_size, hidden_size, gamma=0.1, decay=0.95):
         super().__init__()
         self.input_size = input_size
@@ -80,7 +71,7 @@ class BN_LSTM_Cell(nn.Module):
 
 
 # Own with BN
-class BLSTM_Layer_Own(nn.Module):
+class BLSTMLayerOwn(nn.Module):
     def __init__(self, input_size, seq_len, hidden_size):
         super().__init__()
         self.fwd = LSTM(input_size, seq_len, hidden_size)
@@ -105,8 +96,8 @@ class BLSTM_Layer_Own(nn.Module):
 
 
 # Regular LSTM from pytorch
-class BLSTM_Layer_Torch(nn.Module):
-    def __init__(self, input_size, seq_len, hidden_size):
+class BLSTMLayerTorch(nn.Module):
+    def __init__(self, input_size, hidden_size):
         super().__init__()
 
         self.lstm = torch.nn.LSTM(
@@ -130,7 +121,7 @@ class LSTM(nn.Module):
         self.hidden_size = hidden_size
         self.input_size = input_size
         self.seq_len = seq_len
-        self.cell = BN_LSTM_Cell(input_size, hidden_size)
+        self.cell = BNLSTMCell(input_size, hidden_size)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def forward(self, x):
