@@ -12,6 +12,7 @@ setup(
         "ml_architectures.seqsleepnet",
         "ml_architectures.lseqsleepnet",
         "ml_architectures.usleep",
+        "ml_architectures.common",
     ],
     install_requires=["torch", "numpy"],
 )
