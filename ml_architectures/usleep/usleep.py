@@ -249,9 +249,10 @@ class USleep(nn.Module):
         initial_filters = 5,
         complexity_factor = 1.67,
         progression_factor = 2,
+        depth = 12,
     ):
         super().__init__()
-
+        self.depth = depth
         self.initial_filters = initial_filters
         self.new_filter_factor = math.sqrt(complexity_factor)
         self.progression_factor = math.sqrt(progression_factor)
@@ -268,7 +269,7 @@ class USleep(nn.Module):
         decoder_filters = []
         current_filters = self.initial_filters
 
-        for _ in range(13):
+        for _ in range(self.depth+1):
             encoder_filters.append(int(current_filters*self.new_filter_factor))
             current_filters = int(self.progression_factor*current_filters)
 
