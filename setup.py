@@ -14,5 +14,5 @@ setup(
         "ml_architectures.usleep",
         "ml_architectures.common",
     ],
-    install_requires=["torch", "numpy"],
+    #install_requires=["torch", "numpy"],
 )
