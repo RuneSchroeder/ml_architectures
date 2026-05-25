@@ -5,6 +5,7 @@ run_tests:
     stage: test
     image: python:3.9
     before_script:
+        - pip install torch --index-url https://download.pytorch.org/whl/cpu
         - pip install .
         - pip install pytest
     script:

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlarchitectures"
+version = "0.2.3"
+description = "Shared ML Architectures"
+authors = [
+    {name = "Jesper Strøm", email = "js@ece.au.dk"}
+]
+dependencies = [
+    "numpy>=1.24",
+]
+
+[project.urls]
+Repository = "https://gitlab.au.dk/tech_ear-eeg/ml_architectures"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ml_architectures*"]
