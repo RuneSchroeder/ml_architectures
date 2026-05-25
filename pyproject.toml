@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://gitlab.au.dk/tech_ear-eeg/ml_architectures"
+Repository = "https://github.com/RuneSchroeder/ml_architectures"
 
 [tool.setuptools.packages.find]
 where = ["."]
