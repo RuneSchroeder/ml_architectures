@@ -3,11 +3,20 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mlarchitectures"
+name = "ml-architectures"
 version = "0.2.3"
 description = "Shared ML Architectures"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.9"
 authors = [
     {name = "Jesper Strøm", email = "js@ece.au.dk"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Intended Audience :: Science/Research",
 ]
 dependencies = [
     "numpy>=1.24",

@@ -6,10 +6,16 @@ A shared PyTorch repository for all machine learning architectures used by the N
 ## Installation
 First install PyTorch: https://pytorch.org/
 
-Next, install this repository as a package with the following command:
+Then install from PyPI:
 
 ```console
-python -m pip install git+https://github.com/RuneSchroeder/ml_architectures.git@main
+pip install ml-architectures
+```
+
+Or install the latest version directly from GitHub:
+
+```console
+pip install git+https://github.com/RuneSchroeder/ml_architectures.git@main
 ```
 
 ## Git LFS
